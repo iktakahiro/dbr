@@ -1,104 +1,156 @@
-# gocraft/dbr (database records) [![GoDoc](https://godoc.org/github.com/gocraft/web?status.png)](https://godoc.org/github.com/gocraft/dbr)
+# fjord
 
-gocraft/dbr provides additions to Go's database/sql for super fast performance and convenience.
+[![CircleCI](https://circleci.com/gh/iktakahiro/fjord/tree/master.svg?style=svg)](https://circleci.com/gh/iktakahiro/fjord/tree/master)
+
+fjord is a Go lang Struct/DatabaseRecord Mapper package.
+
+## Driver support
+
+* MySQL
+* PostgreSQL
+
+## Install
+
+```bash
+go get "github.com/iktakahiro/fjord"
+```
 
 ## Getting Started
 
 ```go
-// create a connection (e.g. "postgres", "mysql", or "sqlite3")
-conn, _ := dbr.Open("postgres", "...")
+conn, _ := fjord.Open("mysql", "...")
 
-// create a session for each business unit of execution (e.g. a web request or goworkers job)
 sess := conn.NewSession(nil)
 
-// get a record
 var suggestion Suggestion
-sess.Select("id", "title").From("suggestions").Where("id = ?", 1).Load(&suggestion)
 
-// JSON-ready, with dbr.Null* types serialized like you want
-json.Marshal(&suggestion)
+sess.Select("id", "title").
+        From("suggestions").
+        Where("id = ?", 1).
+        Load(&suggestion)
 ```
 
-## Feature highlights
+## CRUD
 
-### Use a Sweet Query Builder or use Plain SQL
-
-gocraft/dbr supports both.
-
-Sweet Query Builder:
-```go
-stmt := dbr.Select("title", "body").
-	From("suggestions").
-	OrderBy("id").
-	Limit(10)
-```
-
-Plain SQL:
+CRUD example using the bellow struct.
 
 ```go
-builder := dbr.SelectBySql("SELECT `title`, `body` FROM `suggestions` ORDER BY `id` ASC LIMIT 10")
-```
-
-### Amazing instrumentation with session
-
-All queries in gocraft/dbr are made in the context of a session. This is because when instrumenting your app, it's important to understand which business action the query took place in. See gocraft/health for more detail.
-
-Writing instrumented code is a first-class concern for gocraft/dbr. We instrument each query to emit to a gocraft/health-compatible EventReceiver interface.
-
-### Faster performance than using database/sql directly
-Every time you call database/sql's db.Query("SELECT ...") method, under the hood, the mysql driver will create a prepared statement, execute it, and then throw it away. This has a big performance cost.
-
-gocraft/dbr doesn't use prepared statements. We ported mysql's query escape functionality directly into our package, which means we interpolate all of those question marks with their arguments before they get to MySQL. The result of this is that it's way faster, and just as secure.
-
-Check out these [benchmarks](https://github.com/tyler-smith/golang-sql-benchmark).
-
-### IN queries that aren't horrible
-Traditionally, database/sql uses prepared statements, which means each argument in an IN clause needs its own question mark. gocraft/dbr, on the other hand, handles interpolation itself so that you can easily use a single question mark paired with a dynamically sized slice.
-
-```go
-ids := []int64{1, 2, 3, 4, 5}
-builder.Where("id IN ?", ids) // `id` IN ?
-```
-
-### JSON Friendly
-Every try to JSON-encode a sql.NullString? You get:
-```json
-{
-	"str1": {
-		"Valid": true,
-		"String": "Hi!"
-	},
-	"str2": {
-		"Valid": false,
-		"String": ""
-  }
+type Suggestion struct {
+    ID int64
+    Title string
+    Body fjord.NullString
 }
 ```
 
-Not quite what you want. gocraft/dbr has dbr.NullString (and the rest of the Null* types) that encode correctly, giving you:
+### SELECT
 
-```json
-{
-	"str1": "Hi!",
-	"str2": null
+```go
+var suggestion Suggestion
+
+sess.Select("id", "title").
+        From("suggestion").
+        Where("id = ?", 1).
+        Load(&suggestion)
+```
+
+You can implement as a method:
+
+```go
+func(s *Suggestion) LoadByID(sess *fjors.session) (count int, err error) {
+    count, err = sess.Select("id", "title").
+        From("suggestion").
+        Where("id = ?", s.ID).
+        Load(&s)
+           
+    return
+}
+
+// suggestion := &Suggestion{ID: 1}
+// count, err := suggestion.LoadByID(sess)
+```
+
+### INSERT
+
+```go
+suggestion := &Suggestion{Title: "Gopher", Body: "I love Go."}
+
+sess.InsertInto("suggestion").
+        Columns("title", "body").
+        Record(suggestion).
+        Exec()
+```
+
+As a method:
+
+```go
+func(s *Suggestion) Save(sess *fjors.session) (err error) {
+    err = sess.InsertInto("suggestion").
+        Columns("title", "body").
+        Record(s).
+        Exec()
+           
+    return
 }
 ```
 
-### Inserting multiple records
+You can also set a values to insert directly:
 
 ```go
-sess.InsertInto("suggestions").Columns("title", "body").
-  Record(suggestion1).
-  Record(suggestion2)
+sess.InsertInto("suggestion").
+        Columns("title", "body").
+        Values("Gopher", "I love Go.").
+        Exec()
 ```
 
-### Updating records
+Inserting multiple records:
+
+```go
+sess.InsertInto("suggestion").
+        Columns("title", "body").
+        Record(suggestion1).
+        Record(suggestion2).
+        Exec()
+```
+
+### UPDATE
 
 ```go
 sess.Update("suggestions").
-	Set("title", "Gopher").
-	Set("body", "I love go.").
-	Where("id = ?", 1)
+    Set("title", "Gopher").
+    Set("body", "We love go.").
+    Where("id = ?", 1).
+    Exec()
+```
+
+`SetMap()` is helpful when you need to update multiple columns.
+
+```go
+setMap := map[string]interface{}{
+    "title": "Gopher",
+    "body": "We love go."
+}
+
+sess.Update("suggestion).
+    SetMap(setMap).
+    Where("id = ?", 1).
+    Exec()
+```
+
+### DELETE
+
+```go
+sess.DeleteFrom("suggestion").
+        Where("id = ?", 1).
+        Exec()
+```
+
+`Soft Delete` does not implemented, use `Update()` manually.
+
+```go
+sess.Update("suggestion").
+    Set("deleted_at", time.Now().Unix()).
+    Where("id = ?", 1).
+    Exec()
 ```
 
 ### Transactions
@@ -115,127 +167,123 @@ defer tx.RollbackUnlessCommitted()
 return tx.Commit()
 ```
 
-### Load database values to variables
-
-Querying is the heart of gocraft/dbr.
-
-* Load(&any): load everything!
-* LoadStruct(&oneStruct): load struct
-* LoadStructs(&manyStructs): load a slice of structs
-* LoadValue(&oneValue): load basic type
-* LoadValues(&manyValues): load a slice of basic types
+### Load database values to struct fields
 
 ```go
 // columns are mapped by tag then by field
 type Suggestion struct {
-	ID int64  // id, will be autoloaded by last insert id
-	Title string // title
-	Url string `db:"-"` // ignored
-	secret string // ignored
-	Body dbr.NullString `db:"content"` // content
-	User User
+    ID int64  // id
+    Title string // title
+    Url string `db:"-"` // ignored
+    secret string // ignored
+    Body fjord.NullString `db:"content"` // content
+    User User
 }
 
-// By default dbr converts CamelCase property names to snake_case column_names
+// By default fjord converts CamelCase property names to snake_case column_names
 // You can override this with struct tags, just like with JSON tags
-// This is especially helpful while migrating from legacy systems
 type Suggestion struct {
-	Id        int64
-	Title     dbr.NullString `db:"subject"` // subjects are called titles now
-	CreatedAt dbr.NullTime
+    Id        int64
+    Title     fjord.NullString `db:"subject"` // subjects are called titles now
+    CreatedAt fjord.NullTime
 }
 
 var suggestions []Suggestion
-sess.Select("*").From("suggestions").Load(&suggestions)
+sess.Select("*").From("suggestion").Load(&suggestions)
 ```
 
-### Join multiple tables
-
-dbr supports many join types:
+### Table name Alias
 
 ```go
-sess.Select("*").From("suggestions").
-  Join("subdomains", "suggestions.subdomain_id = subdomains.id")
+sess.Select("s.id", "s.title").
+        From(fjord.I("suggestion").As("s")).
+        Load(&suggestions)
+```
 
-sess.Select("*").From("suggestions").
-  LeftJoin("subdomains", "suggestions.subdomain_id = subdomains.id")
+### JOIN
 
-sess.Select("*").From("suggestions").
-  RightJoin("subdomains", "suggestions.subdomain_id = subdomains.id")
+fjord supports many join types:
 
-sess.Select("*").From("suggestions").
-  FullJoin("subdomains", "suggestions.subdomain_id = subdomains.id")
+```go
+sess.Select("*").From("suggestion").
+  Join("subdomain", "suggestion.subdomain_id = subdomain.id")
+
+sess.Select("*").From("suggestion").
+  LeftJoin("subdomain", "suggestions.subdomain_id = subdomain.id")
+
+sess.Select("*").From("suggestion").
+  RightJoin("subdomain", "suggestion.subdomain_id = subdomain.id")
+
+sess.Select("*").From("suggestion").
+  FullJoin("subdomain", "suggestion.subdomain_id = subdomain.id")
 ```
 
 You can join on multiple tables:
 
 ```go
-sess.Select("*").From("suggestions").
-  Join("subdomains", "suggestions.subdomain_id = subdomains.id").
-  Join("accounts", "subdomains.accounts_id = accounts.id")
+sess.Select("*").From("suggestion").
+  Join("subdomain", "suggestion.subdomain_id = subdomain.id").
+  Join("account", "subdomain.account_id = account.id")
+```
+
+Combination of JOIN and Aliases
+
+```go
+sess.Select("s.id", "s.title", "a.name").
+        From(fjord.I("suggestion").As("s")).
+        Left(fjord.I("account").As("a"), "s.account_id = a.id")
 ```
 
 ### Quoting/escaping identifiers (e.g. table and column names)
 
 ```go
-dbr.I("suggestions.id") // `suggestions`.`id`
+fjord.I("suggestions.id") // `suggestions`.`id`
 ```
 
-### Subquery
+### Sub Query
 
 ```go
 sess.Select("count(id)").From(
-  dbr.Select("*").From("suggestions").As("count"),
+  fjord.Select("*").From("suggestion").As("count"),
 )
+```
+
+## IN
+
+```go
+ids := []int64{1, 2, 3, 4, 5}
+builder.Where("id IN ?", ids) // `id` IN ?
 ```
 
 ### Union
 
 ```go
-dbr.Union(
-  dbr.Select("*"),
-  dbr.Select("*"),
+fjord.Union(
+  fjord.Select("*"),
+  fjord.Select("*"),
 )
 
-dbr.UnionAll(
-  dbr.Select("*"),
-  dbr.Select("*"),
+fjord.UnionAll(
+  fjord.Select("*"),
+  fjord.Select("*"),
 )
 ```
 
 Union can be used in subquery.
 
-### Alias/AS
-
-* SelectStmt
-
 ```go
-dbr.Select("*").From("suggestions").As("count")
-```
-
-* Identity
-
-```go
-dbr.I("suggestions").As("s")
-```
-
-* Union
-
-```go
-dbr.Union(
-  dbr.Select("*"),
-  dbr.Select("*"),
+fjord.Union(
+  fjord.Select("*"),
+  fjord.Select("*"),
 ).As("u1")
 
-dbr.UnionAll(
-  dbr.Select("*"),
-  dbr.Select("*"),
+fjord.UnionAll(
+  fjord.Select("*"),
+  fjord.Select("*"),
 ).As("u2")
 ```
 
-### Building arbitrary condition
-
-One common reason to use this is to prevent string concatenation in a loop.
+### Building WHERE condition
 
 * And
 * Or
@@ -247,54 +295,50 @@ One common reason to use this is to prevent string concatenation in a loop.
 * Lte
 
 ```go
-dbr.And(
-  dbr.Or(
-    dbr.Gt("created_at", "2015-09-10"),
-    dbr.Lte("created_at", "2015-09-11"),
+fjord.And(
+  fjord.Or(
+    fjord.Gt("created_at", "2015-09-10"),
+    fjord.Lte("created_at", "2015-09-11"),
   ),
-  dbr.Eq("title", "hello world"),
+  fjord.Eq("title", "hello world"),
 )
 ```
 
-### Built with extensibility
-
-The core of dbr is interpolation, which can expand `?` with arbitrary SQL. If you need a feature that is not currently supported,
-you can build it on your own (or use `dbr.Expr`).
-
-To do that, the value that you wish to be expaned with `?` needs to implement `dbr.Builder`.
+### Plain SQL
 
 ```go
-type Builder interface {
-	Build(Dialect, Buffer) error
+builder := fjord.SelectBySql("SELECT `title`, `body` FROM `suggestion` ORDER BY `id` ASC LIMIT 10")
+```
+
+### JSON Friendly Null* types
+
+Every try to JSON-encode a sql.NullString? You get:
+
+```json
+{
+    "str1": {
+        "Valid": true,
+        "String": "Hi!"
+    },
+    "str2": {
+        "Valid": false,
+        "String": ""
+  }
 }
 ```
 
-## Driver support
+Not quite what you want. fjord has fjord.NullString (and the rest of the Null* types) that encode correctly, giving you:
 
-* MySQL
-* PostgreSQL
-* SQLite3
+```json
+{
+    "str1": "Hi!",
+    "str2": null
+}
+```
 
-## gocraft
+## gocraft/dbr
 
-gocraft offers a toolkit for building web apps. Currently these packages are available:
+fjord is [gocraft/dbr](https://github.com/gorcraft/dbr) fork. gocraft/dbr is a really suitable package in many cases.
 
-* [gocraft/web](https://github.com/gocraft/web) - Go Router + Middleware. Your Contexts.
-* [gocraft/dbr](https://github.com/gocraft/dbr) - Additions to Go's database/sql for super fast performance and convenience.
-* [gocraft/health](https://github.com/gocraft/health) -  Instrument your web apps with logging and metrics.
-* [gocraft/work](https://github.com/gocraft/work) - Process background jobs in Go.
+I'm deeply grateful to the awesome project.
 
-These packages were developed by the [engineering team](https://eng.uservoice.com) at [UserVoice](https://www.uservoice.com) and currently power much of its infrastructure and tech stack.
-
-## Thanks & Authors
-Inspiration from these excellent libraries:
-* [sqlx](https://github.com/jmoiron/sqlx) - various useful tools and utils for interacting with database/sql.
-* [Squirrel](https://github.com/lann/squirrel) - simple fluent query builder.
-
-Authors:
-* Jonathan Novak -- [https://github.com/cypriss](https://github.com/cypriss)
-* Tai-Lin Chu -- [https://github.com/taylorchu](https://github.com/taylorchu)
-* Sponsored by [UserVoice](https://eng.uservoice.com)
-
-Contributors:
-* Paul Bergeron -- [https://github.com/dinedal](https://github.com/dinedal) - SQLite dialect

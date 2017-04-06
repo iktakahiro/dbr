@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 // DeleteStmt builds `DELETE ...`
 type DeleteStmt struct {
