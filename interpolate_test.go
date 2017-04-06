@@ -156,7 +156,7 @@ func TestCommonSQLInjections(t *testing.T) {
 
 			// SELECT the name back and ensure it's equal to the injection attempt
 			var name string
-			err = sess.Select("name").From("person").OrderDir("id", false).Limit(1).LoadValue(&name)
+			_, err = sess.Select("name").From("person").OrderDir("id", false).Limit(1).Load(&name)
 			assert.Equal(t, injectionAttempt, name)
 		}
 	}
