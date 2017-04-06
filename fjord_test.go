@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import (
 	"bytes"
@@ -8,9 +8,8 @@ import (
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gocraft/dbr/dialect"
+	"github.com/iktakahiro/fjord/dialect"
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,11 +37,9 @@ func createSession(driver, dsn string) *Session {
 	var testDSN string
 	switch driver {
 	case "mysql":
-		testDSN = os.Getenv("DBR_TEST_MYSQL_DSN")
+		testDSN = os.Getenv("FJORD_TEST_MYSQL_DSN")
 	case "postgres":
-		testDSN = os.Getenv("DBR_TEST_POSTGRES_DSN")
-	case "sqlite3":
-		testDSN = os.Getenv("DBR_TEST_SQLITE3_DSN")
+		testDSN = os.Getenv("FJORD_TEST_POSTGRES_DSN")
 	}
 	if testDSN != "" {
 		dsn = testDSN
@@ -60,13 +57,12 @@ var (
 	mysqlSession          = createSession("mysql", mysqlDSN)
 	postgresSession       = createSession("postgres", postgresDSN)
 	postgresBinarySession = createSession("postgres", postgresDSN+"&binary_parameters=yes")
-	sqlite3Session        = createSession("sqlite3", sqlite3DSN)
 
 	// all test sessions should be here
-	testSession = []*Session{mysqlSession, postgresSession, sqlite3Session}
+	testSession = []*Session{mysqlSession, postgresSession}
 )
 
-type dbrPerson struct {
+type Person struct {
 	Id    int64
 	Name  string
 	Email string
@@ -88,12 +84,10 @@ func reset(sess *Session) {
 		autoIncrementType = "serial PRIMARY KEY"
 	case dialect.PostgreSQL:
 		autoIncrementType = "serial PRIMARY KEY"
-	case dialect.SQLite3:
-		autoIncrementType = "integer PRIMARY KEY"
 	}
 	for _, v := range []string{
-		`DROP TABLE IF EXISTS dbr_people`,
-		fmt.Sprintf(`CREATE TABLE dbr_people (
+		`DROP TABLE IF EXISTS person`,
+		fmt.Sprintf(`CREATE TABLE person (
 			id %s,
 			name varchar(255) NOT NULL,
 			email varchar(255)
@@ -145,7 +139,7 @@ func benchmarkBytea(b *testing.B, sess *Session) {
 
 func TestBasicCRUD(t *testing.T) {
 	for _, sess := range testSession {
-		jonathan := dbrPerson{
+		jonathan := Person{
 			Name:  "jonathan",
 			Email: "jonathan@uservoice.com",
 		}
@@ -155,7 +149,7 @@ func TestBasicCRUD(t *testing.T) {
 			insertColumns = []string{"id", "name", "email"}
 		}
 		// insert
-		result, err := sess.InsertInto("dbr_people").Columns(insertColumns...).Record(&jonathan).Exec()
+		result, err := sess.InsertInto("person").Columns(insertColumns...).Record(&jonathan).Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err := result.RowsAffected()
@@ -164,27 +158,27 @@ func TestBasicCRUD(t *testing.T) {
 
 		assert.True(t, jonathan.Id > 0)
 		// select
-		var people []dbrPerson
-		count, err := sess.Select("*").From("dbr_people").Where(Eq("id", jonathan.Id)).LoadStructs(&people)
+		var person []Person
+		count, err := sess.Select("*").From("person").Where(Eq("id", jonathan.Id)).Load(&person)
 		assert.NoError(t, err)
 		if assert.Equal(t, 1, count) {
-			assert.Equal(t, jonathan.Id, people[0].Id)
-			assert.Equal(t, jonathan.Name, people[0].Name)
-			assert.Equal(t, jonathan.Email, people[0].Email)
+			assert.Equal(t, jonathan.Id, person[0].Id)
+			assert.Equal(t, jonathan.Name, person[0].Name)
+			assert.Equal(t, jonathan.Email, person[0].Email)
 		}
 
 		// select id
-		ids, err := sess.Select("id").From("dbr_people").ReturnInt64s()
+		ids, err := sess.Select("id").From("person").ReturnInt64s()
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ids))
 
 		// select id limit
-		ids, err = sess.Select("id").From("dbr_people").Limit(1).ReturnInt64s()
+		ids, err = sess.Select("id").From("person").Limit(1).ReturnInt64s()
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(ids))
 
 		// update
-		result, err = sess.Update("dbr_people").Where(Eq("id", jonathan.Id)).Set("name", "jonathan1").Exec()
+		result, err = sess.Update("person").Where(Eq("id", jonathan.Id)).Set("name", "jonathan1").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -192,11 +186,11 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		var n NullInt64
-		sess.Select("count(*)").From("dbr_people").Where("name = ?", "jonathan1").LoadValue(&n)
+		sess.Select("count(*)").From("person").Where("name = ?", "jonathan1").Load(&n)
 		assert.EqualValues(t, 1, n.Int64)
 
 		// delete
-		result, err = sess.DeleteFrom("dbr_people").Where(Eq("id", jonathan.Id)).Exec()
+		result, err = sess.DeleteFrom("person").Where(Eq("id", jonathan.Id)).Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -204,7 +198,7 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		// select id
-		ids, err = sess.Select("id").From("dbr_people").ReturnInt64s()
+		ids, err = sess.Select("id").From("person").ReturnInt64s()
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(ids))
 	}

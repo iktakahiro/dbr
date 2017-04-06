@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import (
 	"bytes"
@@ -34,6 +34,7 @@ var (
 	typeValuer = reflect.TypeOf((*driver.Valuer)(nil)).Elem()
 )
 
+// TODO need update
 func structValue(m map[string]reflect.Value, value reflect.Value) {
 	if value.Type().Implements(typeValuer) {
 		return

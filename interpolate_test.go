@@ -1,11 +1,11 @@
-package dbr
+package fjord
 
 import (
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/gocraft/dbr/dialect"
+	"github.com/iktakahiro/fjord/dialect"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -149,14 +149,14 @@ func TestCommonSQLInjections(t *testing.T) {
 	for _, sess := range testSession {
 		for _, injectionAttempt := range strings.Split(injectionAttempts, "\n") {
 			// Create a user with the attempted injection as the email address
-			_, err := sess.InsertInto("dbr_people").
+			_, err := sess.InsertInto("person").
 				Pair("name", injectionAttempt).
 				Exec()
 			assert.NoError(t, err)
 
 			// SELECT the name back and ensure it's equal to the injection attempt
 			var name string
-			err = sess.Select("name").From("dbr_people").OrderDir("id", false).Limit(1).LoadValue(&name)
+			err = sess.Select("name").From("person").OrderDir("id", false).Limit(1).LoadValue(&name)
 			assert.Equal(t, injectionAttempt, name)
 		}
 	}
