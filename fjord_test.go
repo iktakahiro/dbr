@@ -167,16 +167,6 @@ func TestBasicCRUD(t *testing.T) {
 			assert.Equal(t, jonathan.Email, person[0].Email)
 		}
 
-		// select id
-		ids, err := sess.Select("id").From("person").ReturnInt64s()
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(ids))
-
-		// select id limit
-		ids, err = sess.Select("id").From("person").Limit(1).ReturnInt64s()
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(ids))
-
 		// update
 		result, err = sess.Update("person").Where(Eq("id", jonathan.Id)).Set("name", "jonathan1").Exec()
 		assert.NoError(t, err)
@@ -196,10 +186,5 @@ func TestBasicCRUD(t *testing.T) {
 		rowsAffected, err = result.RowsAffected()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, rowsAffected)
-
-		// select id
-		ids, err = sess.Select("id").From("person").ReturnInt64s()
-		assert.NoError(t, err)
-		assert.Equal(t, 0, len(ids))
 	}
 }
