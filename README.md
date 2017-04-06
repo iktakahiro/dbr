@@ -1,5 +1,7 @@
 # fjord
 
+[![CircleCI](https://circleci.com/gh/iktakahiro/fjord/tree/master.svg?style=svg)](https://circleci.com/gh/iktakahiro/fjord/tree/master)
+
 fjord is a Go lang Struct/DatabaseRecord Mapper package.
 
 ## Driver support
