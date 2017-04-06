@@ -2,12 +2,18 @@
 
 [![CircleCI](https://circleci.com/gh/iktakahiro/fjord/tree/master.svg?style=svg)](https://circleci.com/gh/iktakahiro/fjord/tree/master)
 
-fjord is a Go lang Struct/DatabaseRecord Mapper package.
+![fjord](./docs/img/fjord-picture.png)
+
+fjord is a Go lang *Struct/databaseRecord Mapper* package.
 
 ## Driver support
 
-* MySQL
-* PostgreSQL
+* MySQL 5.6
+* (PostgreSQL)
+
+## Go versions
+
+- 1.8
 
 ## Install
 
@@ -56,7 +62,7 @@ sess.Select("id", "title").
 You can implement as a method:
 
 ```go
-func(s *Suggestion) LoadByID(sess *fjors.session) (count int, err error) {
+func(s *Suggestion) LoadByID(sess *fjord.session) (count int, err error) {
     count, err = sess.Select("id", "title").
         From("suggestion").
         Where("id = ?", s.ID).
@@ -83,7 +89,7 @@ sess.InsertInto("suggestion").
 As a method:
 
 ```go
-func(s *Suggestion) Save(sess *fjors.session) (err error) {
+func(s *Suggestion) Save(sess *fjord.session) (err error) {
     err = sess.InsertInto("suggestion").
         Columns("title", "body").
         Record(s).
@@ -153,7 +159,7 @@ sess.Update("suggestion").
     Exec()
 ```
 
-### Transactions
+## Transactions
 
 ```go
 tx, err := sess.Begin()
@@ -167,7 +173,7 @@ defer tx.RollbackUnlessCommitted()
 return tx.Commit()
 ```
 
-### Load database values to struct fields
+## Load database values to struct fields
 
 ```go
 // columns are mapped by tag then by field
@@ -192,7 +198,7 @@ var suggestions []Suggestion
 sess.Select("*").From("suggestion").Load(&suggestions)
 ```
 
-### Table name Alias
+## Table name Alias
 
 ```go
 sess.Select("s.id", "s.title").
@@ -200,7 +206,7 @@ sess.Select("s.id", "s.title").
         Load(&suggestions)
 ```
 
-### JOIN
+## JOIN
 
 fjord supports many join types:
 
@@ -234,13 +240,13 @@ sess.Select("s.id", "s.title", "a.name").
         Left(fjord.I("account").As("a"), "s.account_id = a.id")
 ```
 
-### Quoting/escaping identifiers (e.g. table and column names)
+## Quoting/escaping identifiers (e.g. table and column names)
 
 ```go
 fjord.I("suggestions.id") // `suggestions`.`id`
 ```
 
-### Sub Query
+## Sub Query
 
 ```go
 sess.Select("count(id)").From(
@@ -255,7 +261,7 @@ ids := []int64{1, 2, 3, 4, 5}
 builder.Where("id IN ?", ids) // `id` IN ?
 ```
 
-### Union
+## Union
 
 ```go
 fjord.Union(
@@ -269,7 +275,7 @@ fjord.UnionAll(
 )
 ```
 
-Union can be used in subquery.
+Union can be used in sub query.
 
 ```go
 fjord.Union(
@@ -283,7 +289,7 @@ fjord.UnionAll(
 ).As("u2")
 ```
 
-### Building WHERE condition
+## Building WHERE condition
 
 * And
 * Or
@@ -304,13 +310,13 @@ fjord.And(
 )
 ```
 
-### Plain SQL
+## Plain SQL
 
 ```go
 builder := fjord.SelectBySql("SELECT `title`, `body` FROM `suggestion` ORDER BY `id` ASC LIMIT 10")
 ```
 
-### JSON Friendly Null* types
+## JSON Friendly Null* types
 
 Every try to JSON-encode a sql.NullString? You get:
 
@@ -336,9 +342,26 @@ Not quite what you want. fjord has fjord.NullString (and the rest of the Null* t
 }
 ```
 
-## gocraft/dbr
+## Tips
+
+Is the package name too long for humans? Set an alias.
+
+```go
+import (
+        	fj "github.com/iktakahiro/fjord"
+)
+
+condition := fj.Eq("id", 1)
+```
+
+## Thanks
+
+### gocraft/dbr
 
 fjord is [gocraft/dbr](https://github.com/gorcraft/dbr) fork. gocraft/dbr is a really suitable package in many cases.
 
 I'm deeply grateful to the awesome project.
 
+### Pictures
+
+The pretty nice picture is taken by [@tpsdave](https://pixabay.com/en/users/tpsdave-12019/).
