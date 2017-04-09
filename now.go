@@ -1,9 +1,11 @@
-package dbr
+package fjord
 
 import (
 	"database/sql/driver"
 	"time"
 )
+
+// TODO: TimeZone and UNIX TIME format support
 
 // Now is a value that serializes to the current time
 var Now = nowSentinel{}

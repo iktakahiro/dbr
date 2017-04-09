@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import "database/sql"
 
@@ -13,9 +13,9 @@ type Tx struct {
 func (sess *Session) Begin() (*Tx, error) {
 	tx, err := sess.Connection.Begin()
 	if err != nil {
-		return nil, sess.EventErr("dbr.begin.error", err)
+		return nil, sess.EventErr("fjord.begin.error", err)
 	}
-	sess.Event("dbr.begin")
+	sess.Event("fjord.begin")
 
 	return &Tx{
 		EventReceiver: sess,
@@ -28,9 +28,9 @@ func (sess *Session) Begin() (*Tx, error) {
 func (tx *Tx) Commit() error {
 	err := tx.Tx.Commit()
 	if err != nil {
-		return tx.EventErr("dbr.commit.error", err)
+		return tx.EventErr("fjord.commit.error", err)
 	}
-	tx.Event("dbr.commit")
+	tx.Event("fjord.commit")
 	return nil
 }
 
@@ -38,9 +38,9 @@ func (tx *Tx) Commit() error {
 func (tx *Tx) Rollback() error {
 	err := tx.Tx.Rollback()
 	if err != nil {
-		return tx.EventErr("dbr.rollback", err)
+		return tx.EventErr("fjord.rollback", err)
 	}
-	tx.Event("dbr.rollback")
+	tx.Event("fjord.rollback")
 	return nil
 }
 
@@ -52,8 +52,8 @@ func (tx *Tx) RollbackUnlessCommitted() {
 	if err == sql.ErrTxDone {
 		// ok
 	} else if err != nil {
-		tx.EventErr("dbr.rollback_unless_committed", err)
+		tx.EventErr("fjord.rollback_unless_committed", err)
 	} else {
-		tx.Event("dbr.rollback")
+		tx.Event("fjord.rollback")
 	}
 }

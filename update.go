@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 // UpdateStmt builds `UPDATE ...`
 type UpdateStmt struct {

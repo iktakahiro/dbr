@@ -1,6 +1,6 @@
-package dbr
+package fjord
 
-// EventReceiver gets events from dbr methods for logging purposes
+// EventReceiver gets events from fjord methods for logging purposes
 type EventReceiver interface {
 	Event(eventName string)
 	EventKv(eventName string, kvs map[string]string)

@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ func TestTransactionCommit(t *testing.T) {
 
 		id := nextID()
 
-		result, err := tx.InsertInto("dbr_people").Columns("id", "name", "email").Values(id, "Barack", "obama@whitehouse.gov").Exec()
+		result, err := tx.InsertInto("person").Columns("id", "name", "email").Values(id, "Barack", "obama@whitehouse.gov").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err := result.RowsAffected()
@@ -24,8 +24,8 @@ func TestTransactionCommit(t *testing.T) {
 		err = tx.Commit()
 		assert.NoError(t, err)
 
-		var person dbrPerson
-		err = tx.Select("*").From("dbr_people").Where(Eq("id", id)).LoadStruct(&person)
+		var person Person
+		_, err = tx.Select("*").From("person").Where(Eq("id", id)).Load(&person)
 		assert.Error(t, err)
 	}
 }
@@ -38,7 +38,7 @@ func TestTransactionRollback(t *testing.T) {
 
 		id := nextID()
 
-		result, err := tx.InsertInto("dbr_people").Columns("id", "name", "email").Values(id, "Barack", "obama@whitehouse.gov").Exec()
+		result, err := tx.InsertInto("person").Columns("id", "name", "email").Values(id, "Barack", "obama@whitehouse.gov").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err := result.RowsAffected()
@@ -48,8 +48,8 @@ func TestTransactionRollback(t *testing.T) {
 		err = tx.Rollback()
 		assert.NoError(t, err)
 
-		var person dbrPerson
-		err = tx.Select("*").From("dbr_people").Where(Eq("id", id)).LoadStruct(&person)
+		var person Person
+		_, err = tx.Select("*").From("person").Where(Eq("id", id)).Load(&person)
 		assert.Error(t, err)
 	}
 }
