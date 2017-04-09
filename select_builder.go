@@ -8,7 +8,8 @@ type SelectBuilder struct {
 	*SelectStmt
 }
 
-func prepareSelect(a []string) []interface{} {
+// TODO perhaps, Unnecessary
+func prepareSelect(a []interface{}) []interface{} {
 	b := make([]interface{}, len(a))
 	for i := range a {
 		b[i] = a[i]
@@ -16,7 +17,7 @@ func prepareSelect(a []string) []interface{} {
 	return b
 }
 
-func (sess *Session) Select(column ...string) *SelectBuilder {
+func (sess *Session) Select(column ...interface{}) *SelectBuilder {
 	return &SelectBuilder{
 		runner:        sess,
 		EventReceiver: sess,
@@ -25,7 +26,7 @@ func (sess *Session) Select(column ...string) *SelectBuilder {
 	}
 }
 
-func (tx *Tx) Select(column ...string) *SelectBuilder {
+func (tx *Tx) Select(column ...interface{}) *SelectBuilder {
 	return &SelectBuilder{
 		runner:        tx,
 		EventReceiver: tx,
