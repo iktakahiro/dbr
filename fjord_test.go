@@ -28,9 +28,8 @@ func nextID() int64 {
 }
 
 const (
-	mysqlDSN    = "root@unix(/tmp/mysql.sock)/uservoice_test?charset=utf8"
-	postgresDSN = "postgres://postgres@localhost:5432/uservoice_test?sslmode=disable"
-	sqlite3DSN  = ":memory:"
+	mysqlDSN    = "root@unix(/tmp/mysql.sock)/fj_test?charset=utf8"
+	postgresDSN = "postgres://postgres@localhost:5432/fj_test?sslmode=disable"
 )
 
 func createSession(driver, dsn string) *Session {
@@ -63,7 +62,7 @@ var (
 )
 
 type Person struct {
-	Id    int64
+	ID    int64
 	Name  string
 	Email string
 }
@@ -92,6 +91,18 @@ func reset(sess *Session) {
 			name varchar(255) NOT NULL,
 			email varchar(255)
 		)`, autoIncrementType),
+
+		`DROP TABLE IF EXISTS person2`,
+		`CREATE TABLE person2 (
+			id BIGINT,
+			name varchar(255) NOT NULL
+		)`,
+
+		`DROP TABLE IF EXISTS role`,
+		`CREATE TABLE role (
+			person_id BIGINT,
+			name VARCHAR(255) NOT NULL
+		)`,
 
 		`DROP TABLE IF EXISTS null_types`,
 		fmt.Sprintf(`CREATE TABLE null_types (
@@ -139,36 +150,36 @@ func benchmarkBytea(b *testing.B, sess *Session) {
 
 func TestBasicCRUD(t *testing.T) {
 	for _, sess := range testSession {
-		jonathan := Person{
-			Name:  "jonathan",
-			Email: "jonathan@uservoice.com",
+		person := Person{
+			Name:  "John Titor",
+			Email: "john@example.com",
 		}
 		insertColumns := []string{"name", "email"}
 		if sess.Dialect == dialect.PostgreSQL {
-			jonathan.Id = nextID()
+			person.ID = nextID()
 			insertColumns = []string{"id", "name", "email"}
 		}
 		// insert
-		result, err := sess.InsertInto("person").Columns(insertColumns...).Record(&jonathan).Exec()
+		result, err := sess.InsertInto("person").Columns(insertColumns...).Record(&person).Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err := result.RowsAffected()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, rowsAffected)
 
-		assert.True(t, jonathan.Id > 0)
+		assert.True(t, person.ID > 0)
 		// select
-		var person []Person
-		count, err := sess.Select("*").From("person").Where(Eq("id", jonathan.Id)).Load(&person)
+		var persons []Person
+		count, err := sess.Select("*").From("person").Where(Eq("id", person.ID)).Load(&persons)
 		assert.NoError(t, err)
 		if assert.Equal(t, 1, count) {
-			assert.Equal(t, jonathan.Id, person[0].Id)
-			assert.Equal(t, jonathan.Name, person[0].Name)
-			assert.Equal(t, jonathan.Email, person[0].Email)
+			assert.Equal(t, person.ID, persons[0].ID)
+			assert.Equal(t, person.Name, persons[0].Name)
+			assert.Equal(t, person.Email, persons[0].Email)
 		}
 
 		// update
-		result, err = sess.Update("person").Where(Eq("id", jonathan.Id)).Set("name", "jonathan1").Exec()
+		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Taylor").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -176,15 +187,65 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		var n NullInt64
-		sess.Select("count(*)").From("person").Where("name = ?", "jonathan1").Load(&n)
+		sess.Select("count(*)").From("person").Where("name = ?", "John Taylor").Load(&n)
 		assert.EqualValues(t, 1, n.Int64)
 
 		// delete
-		result, err = sess.DeleteFrom("person").Where(Eq("id", jonathan.Id)).Exec()
+		result, err = sess.DeleteFrom("person").Where(Eq("id", person.ID)).Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
 		assert.NoError(t, err)
 		assert.EqualValues(t, 1, rowsAffected)
+	}
+}
+
+type PersonWithTag struct {
+	ID   int    `db:"p.id"`
+	Name string `db:"p.name"`
+}
+
+type RoleWithTag struct {
+	PersonID int    `db:"r.person_id"`
+	Name     string `db:"r.name"`
+}
+
+type PersonForJoin struct {
+	PersonWithTag
+	RoleWithTag
+}
+
+func TestJoin(t *testing.T) {
+	for _, sess := range testSession {
+		person := &PersonWithTag{
+			ID:   2036,
+			Name: "John Titor",
+		}
+		// insert - person
+		_, err := sess.InsertInto("person2").Columns("id", "name").Record(person).Exec()
+		assert.NoError(t, err)
+
+		role := &RoleWithTag{
+			PersonID: 2036,
+			Name:     "Time Traveler",
+		}
+		//insert - role
+		_, err = sess.InsertInto("role").Columns("person_id", "name").Record(role).Exec()
+		assert.NoError(t, err)
+
+		// select
+
+		personForJoin := new(PersonForJoin)
+		_, err = sess.Select(I("p.id"), I("p.name"), I("r.person_id"), I("r.name")).
+			From(I("person2").As("p")).
+			LeftJoin(I("role").As("r"), "p.id = r.person_id").
+			Where("p.id = ?", 2036).
+			Load(personForJoin)
+
+		assert.NoError(t, err)
+		assert.Equal(t, personForJoin.PersonWithTag.ID, 2036)
+		assert.Equal(t, personForJoin.PersonWithTag.Name, "John Titor")
+		assert.Equal(t, personForJoin.RoleWithTag.PersonID, 2036)
+		assert.Equal(t, personForJoin.RoleWithTag.Name, "Time Traveler")
 	}
 }

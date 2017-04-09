@@ -26,6 +26,25 @@ func TestSelectStmt(t *testing.T) {
 	assert.Equal(t, 3, len(buf.Value()))
 }
 
+func TestSelectWithAliasStmt(t *testing.T) {
+
+	for _, d := range []Dialect{dialect.MySQL, dialect.PostgreSQL} {
+		buf := NewBuffer()
+		builder := Select(I("t1.a"), I("t2.b").As("t2__b"), "c AS t2__c").
+			From(I("table1").As("t1")).
+			LeftJoin(I("table2").As("t2"), "t1.id = t2.id")
+		err := builder.Build(d, buf)
+		assert.NoError(t, err)
+
+		switch d {
+		case dialect.MySQL:
+			assert.Equal(t, "SELECT `t1`.`a` AS t1__a, ?, c AS t2__c FROM ? LEFT JOIN ? ON t1.id = t2.id", buf.String())
+		case dialect.PostgreSQL:
+			assert.Equal(t, `SELECT "t1"."a" AS t1__a, ?, c AS t2__c FROM ? LEFT JOIN ? ON t1.id = t2.id`, buf.String())
+		}
+	}
+}
+
 func BenchmarkSelectSQL(b *testing.B) {
 	buf := NewBuffer()
 	for i := 0; i < b.N; i++ {
