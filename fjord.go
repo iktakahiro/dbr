@@ -64,7 +64,7 @@ var (
 
 // SessionRunner can do anything that a Session can except start a transaction.
 type SessionRunner interface {
-	Select(column ...string) *SelectBuilder
+	Select(column ...interface{}) *SelectBuilder
 	SelectBySql(query string, value ...interface{}) *SelectBuilder
 
 	InsertInto(table string) *InsertBuilder
@@ -141,7 +141,8 @@ func query(runner runner, log EventReceiver, builder Builder, d Dialect, dest in
 			"sql": query,
 		})
 	}
-	count, err := Load(rows, dest)
+
+	count, err := load(rows, dest)
 	if err != nil {
 		return 0, log.EventErrKv("fjord.select.load.scan", err, kvs{
 			"sql": query,

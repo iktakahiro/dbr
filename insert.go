@@ -93,8 +93,9 @@ func (b *InsertStmt) Record(structValue interface{}) *InsertStmt {
 
 	if v.Kind() == reflect.Struct {
 		var value []interface{}
-		m := structMap(v)
+		m := structMap(v, true)
 		for _, key := range b.Column {
+
 			if val, ok := m[key]; ok {
 				value = append(value, val.Interface())
 			} else {
