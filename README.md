@@ -24,6 +24,12 @@ go get "github.com/iktakahiro/fjord"
 ## Getting Started
 
 ```go
+import (
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/iktakahiro/fjord"
+)
+
+
 dsn := "fj_test:password@tcp(127.0.0.1:3306)/fj_test?charset=utf8mb4,utf8"
 conn, _ := fjord.Open("mysql", dsn)
 
@@ -239,9 +245,9 @@ This syntax is one of the key features in fjord.
 
 ```go
 import (
-        "fmt"
+    "fmt"
 
-        fj "github.com/iktakahiro/fjord"
+    fj "github.com/iktakahiro/fjord"
 )
 
 type Person struct {
@@ -259,11 +265,13 @@ type PersonForJoin struct {
     Role
 }
 
+// ...
+
 person := new(PersonForJoin)
 
 sess.Select(fj.I("p.id"), fj.I("p.name"), fj.I("r.person_id"), fj.I("r.name")).
-    From(fjord.I("person").As("p")).
-    Left(fjord.I("role").As("r"), "p.id = r.person_id").
+    From(fj.I("person").As("p")).
+    Left(fj.I("role").As("r"), "p.id = r.person_id").
     Load(person)
 
 // In MySQL dialect:
@@ -348,8 +356,8 @@ fjord.UnionAll(
 ```go
 fjord.And(
     fjord.Or(
-            fjord.Gt("created_at", "2015-09-10"),
-            fjord.Lte("created_at", "2015-09-11"),
+        fjord.Gt("created_at", "2015-09-10"),
+        fjord.Lte("created_at", "2015-09-11"),
     ),
     fjord.Eq("title", "hello world"),
 )
@@ -393,7 +401,7 @@ Is the package name too long for humans? Set an alias.
 
 ```go
 import (
-        	fj "github.com/iktakahiro/fjord"
+    fj "github.com/iktakahiro/fjord"
 )
 
 condition := fj.Eq("id", 1)
