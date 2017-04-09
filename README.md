@@ -2,9 +2,9 @@
 
 [![CircleCI](https://circleci.com/gh/iktakahiro/fjord/tree/master.svg?style=svg)](https://circleci.com/gh/iktakahiro/fjord/tree/master)
 
-![fjord](./docs/img/fjord-picture.png)
-
 fjord is a Go lang *Struct/databaseRecord Mapper* package.
+
+![fjord](./docs/img/fjord-picture.png)
 
 ## Driver support
 
@@ -245,7 +245,7 @@ import (
 )
 
 type Person struct {
-    ID   int    `db:"p.id"` // "p" is the alias name of "person table", id is a column name.
+    ID   int    `db:"p.id"` // "p" is the alias name of "person table", "id" is a column name.
     Name string `db:"p.name"`
 }
 
@@ -270,6 +270,12 @@ sess.Select(fj.I("p.id"), fj.I("p.name"), fj.I("r.person_id"), fj.I("r.name")).
 // SELECT `p`.`id` AS p__id, `p`.`name` AS p__Name, `r`.`person_id` r__person_id, `r`.`name`
 //    FROM `person` AS p
 //    LEFT JOIN `role` AS r on p.id = r.person_id
+//
+// Results of mapping:
+//     person.id      => PersonForJoin.Person.ID
+//     person.name    => PersonForJoin.Person.Name
+//     role.person_id => PersonForJoin.Role.PersonID
+//     role.name      => PersonForJoin.Role.Name
 ```
 
 When a tag contains ".", converts a column name for loading destination into the alias format.
@@ -278,7 +284,7 @@ When a tag contains ".", converts a column name for loading destination into the
 
 And, when `I()` function is used in Select statement, a column alias is generated automatically.
 
-- `Select(I("p.id"))` => `p.id AS p__id`
+- `Select(I("p.id"))` => `SELECT p.id AS p__id FROM...`
 
 The above syntax is same as:
 
