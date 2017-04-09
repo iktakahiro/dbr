@@ -15,10 +15,18 @@ fjord is a Go lang *Struct/databaseRecord Mapper* package.
 
 - 1.8
 
+But fjord does not support context yet. I'll update it.
+
 ## Install
 
 ```bash
 go get "github.com/iktakahiro/fjord"
+```
+
+If you use [glide](https://github.com/Masterminds/glide):
+
+```bash
+glide get "github.com/iktakahiro/fjord"
 ```
 
 ## Getting Started
@@ -43,15 +51,76 @@ sess.Select("id", "title").
     Load(&suggestion)
 ```
 
+## JOIN using Tag and Identifier (**Experimental**)
+
+This syntax is one of the key features in fjord.
+
+```go
+import (
+    _ "github.com/go-sql-driver/mysql"
+    fj "github.com/iktakahiro/fjord"
+)
+
+type Person struct {
+    ID   int    `db:"p.id"` // "p" is the alias name of "person table", "id" is a column name.
+    Name string `db:"p.name"`
+}
+
+type Role struct {
+    PersonID int    `db:"r.person_id"`
+    Name     string `db:"r.name"`
+}
+
+type PersonForJoin struct {
+    Person
+    Role
+}
+
+// ...
+
+person := new(PersonForJoin)
+
+sess.Select(fj.I("p.id"), fj.I("p.name"), fj.I("r.person_id"), fj.I("r.name")).
+    From(fj.I("person").As("p")).
+    Left(fj.I("role").As("r"), "p.id = r.person_id").
+    Where("p.id = ?", 1)
+    Load(person)
+
+// In MySQL dialect:
+// SELECT `p`.`id` AS p__id, `p`.`name` AS p__Name, `r`.`person_id` r__person_id, `r`.`name`
+//    FROM `person` AS p
+//    LEFT JOIN `role` AS r on p.id = r.person_id
+//    WHERE p.id = 1;
+//
+// Results of mapping:
+//     person.id      => PersonForJoin.Person.ID
+//     person.name    => PersonForJoin.Person.Name
+//     role.person_id => PersonForJoin.Role.PersonID
+//     role.name      => PersonForJoin.Role.Name
+```
+
+When a tag contains ".", converts a column name for loading destination into the alias format.
+
+- `db:"p.id"` => `p__id`
+
+And, when you use `I()` function in a select statement, a column alias is generated automatically.
+
+- `Select(I("p.id"))` => `SELECT p.id AS p__id FROM...`
+
+The above syntax is same as:
+
+- `Select(I("p.id").As("p__id"))`
+- `Select("p.id AS p__id")`
+
 ## CRUD
 
 CRUD example using the bellow struct.
 
 ```go
 type Suggestion struct {
-	ID    int64
-	Title string
-	Body  fjord.NullString
+    ID    int64
+    Title string
+    Body  fjord.NullString
 }
 ```
 
@@ -183,29 +252,29 @@ return tx.Commit()
 ## Load database values to struct fields
 
 ```go
-// columns are mapped by tag then by field
+// Columns are mapped by tag then by field
 type Suggestion struct {
-	ID     int64            // id
-	Title  string           // title
-	Url    string           `db:"-"` // ignored
-	secret string           // ignored
-	Body   fjord.NullString `db:"content"` // content
-	User   User
+    ID     int64            // id
+    Title  string           // title
+    Url    string           `db:"-"` // ignored
+    secret string           // ignored
+    Body   fjord.NullString `db:"content"` // content
+    User   User
 }
 
-// By default fjord converts CamelCase property names to snake_case column_names
+// By default, fjord converts CamelCase field names to snake_case column_names
 // You can override this with struct tags, just like with JSON tags
 type Suggestion struct {
-	Id        int64
-	Title     fjord.NullString `db:"subject"` // subjects are called titles now
-	CreatedAt fjord.NullTime
+    Id        int64
+    Title     fjord.NullString `db:"subject"` // subjects are called titles now
+    CreatedAt fjord.NullTime
 }
 
 var suggestions []Suggestion
 sess.Select("*").From("suggestion").Load(&suggestions)
 ```
 
-## Table name Alias
+## Table name alias
 
 ```go
 sess.Select("s.id", "s.title").
@@ -214,8 +283,6 @@ sess.Select("s.id", "s.title").
 ```
 
 ## JOIN
-
-fjord supports many join types:
 
 ```go
 sess.Select("*").From("suggestion").
@@ -238,66 +305,6 @@ sess.Select("*").From("suggestion").
   Join("subdomain", "suggestion.subdomain_id = subdomain.id").
   Join("account", "subdomain.account_id = account.id")
 ```
-
-## JOIN using Tag and Identifier (**Experimental**)
-
-This syntax is one of the key features in fjord.
-
-```go
-import (
-    "fmt"
-
-    fj "github.com/iktakahiro/fjord"
-)
-
-type Person struct {
-    ID   int    `db:"p.id"` // "p" is the alias name of "person table", "id" is a column name.
-    Name string `db:"p.name"`
-}
-
-type Role struct {
-    PersonID int    `db:"r.person_id"`
-    Name     string `db:"r.name"`
-}
-
-type PersonForJoin struct {
-    Person
-    Role
-}
-
-// ...
-
-person := new(PersonForJoin)
-
-sess.Select(fj.I("p.id"), fj.I("p.name"), fj.I("r.person_id"), fj.I("r.name")).
-    From(fj.I("person").As("p")).
-    Left(fj.I("role").As("r"), "p.id = r.person_id").
-    Load(person)
-
-// In MySQL dialect:
-// SELECT `p`.`id` AS p__id, `p`.`name` AS p__Name, `r`.`person_id` r__person_id, `r`.`name`
-//    FROM `person` AS p
-//    LEFT JOIN `role` AS r on p.id = r.person_id
-//
-// Results of mapping:
-//     person.id      => PersonForJoin.Person.ID
-//     person.name    => PersonForJoin.Person.Name
-//     role.person_id => PersonForJoin.Role.PersonID
-//     role.name      => PersonForJoin.Role.Name
-```
-
-When a tag contains ".", converts a column name for loading destination into the alias format.
-
-- `db:"p.id"` => `p__id`
-
-And, when `I()` function is used in Select statement, a column alias is generated automatically.
-
-- `Select(I("p.id"))` => `SELECT p.id AS p__id FROM...`
-
-The above syntax is same as:
-
-- `Select(I("p.id").As("p__id"))`
-- `Select("p.id AS p__id")`
 
 ## Sub Query
 
@@ -328,7 +335,7 @@ fjord.UnionAll(
 )
 ```
 
-Union can be used in sub query.
+Union can be used in subquery.
 
 ```go
 fjord.Union(
@@ -371,7 +378,7 @@ builder := fjord.SelectBySql("SELECT `title`, `body` FROM `suggestion` ORDER BY 
 
 ## JSON Friendly Null* types
 
-Every try to JSON-encode a sql.NullString? You get:
+Every tries to JSON-encode a sql.NullString? You get:
 
 ```json
 {
@@ -411,11 +418,11 @@ condition := fj.Eq("id", 1)
 
 ### gocraft/dbr
 
-fjord is [gocraft/dbr](https://github.com/gorcraft/dbr) fork. gocraft/dbr is a really suitable package in many cases.
+fjord is [gocraft/dbr](https://github.com/gorcraft/dbr) fork. gocraft/dbr is a suitable package in many cases.
 
 I'm deeply grateful to the awesome project.
 
 ### Pictures
 
-The pretty nice picture is taken by [@tpsdave](https://pixabay.com/en/users/tpsdave-12019/).
+The pretty beautiful picture is taken by [@tpsdave](https://pixabay.com/en/users/tpsdave-12019/).
 
