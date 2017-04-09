@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import "fmt"
 
@@ -45,7 +45,11 @@ func (b *SelectStmt) Build(d Dialect, buf Buffer) error {
 		case string:
 			// FIXME: no quote ident
 			buf.WriteString(col)
-		default:
+		case I: // I("col")
+			col.Build(d, buf)
+			buf.WriteString(" AS ")
+			buf.WriteString(columnNameToAlias(string(col)))
+		default: // I("col").As("alias")
 			buf.WriteString(placeholder)
 			buf.WriteValue(col)
 		}

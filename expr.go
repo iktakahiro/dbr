@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 // XxxBuilders all support raw query
 type raw struct {

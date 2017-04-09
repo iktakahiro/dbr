@@ -1,4 +1,4 @@
-package dbr
+package fjord
 
 import (
 	"reflect"
@@ -7,6 +7,37 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestColumnNameToAlias(t *testing.T) {
+	assert.Equal(t, "user__id", columnNameToAlias("user.id"))
+}
+
+type StructForGetColumnNameFromTag struct {
+	NonPrefixField int64  `db:"non_prefix_field"`
+	PrefixField    string `db:"prefix.prefix_field"`
+	IgnoreField    string `db:"-"`
+	NonTagField    string
+}
+
+func TestGetColumnNameFromTag(t *testing.T) {
+
+	testStruct := &StructForGetColumnNameFromTag{}
+	rt := reflect.TypeOf(*testStruct)
+
+	NonPrefixField := rt.Field(0)
+	assert.Equal(t, "non_prefix_field", getColumnNameFromTag(NonPrefixField, false))
+
+	PrefixField := rt.Field(1)
+	assert.Equal(t, "prefix__prefix_field", getColumnNameFromTag(PrefixField, false))
+	// When ignorePrefix flag is true, ignore string before ".":
+	assert.Equal(t, "prefix_field", getColumnNameFromTag(PrefixField, true))
+
+	IgnoreField := rt.Field(2)
+	assert.Equal(t, "", getColumnNameFromTag(IgnoreField, false))
+
+	NonTagField := rt.Field(3)
+	assert.Equal(t, "non_tag_field", getColumnNameFromTag(NonTagField, false))
+}
 
 func TestSnakeCase(t *testing.T) {
 	for _, test := range []struct {
@@ -90,7 +121,7 @@ func TestStructMap(t *testing.T) {
 			ok: []string{"test2"},
 		},
 	} {
-		m := structMap(reflect.ValueOf(test.in))
+		m := structMap(reflect.ValueOf(test.in), false)
 		for _, c := range test.ok {
 			_, ok := m[c]
 			assert.True(t, ok)

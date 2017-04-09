@@ -1,11 +1,11 @@
-package dbr
+package fjord
 
 import (
 	"database/sql"
 	"fmt"
 	"time"
 
-	"github.com/gocraft/dbr/dialect"
+	"github.com/iktakahiro/fjord/dialect"
 )
 
 // Open instantiates a Connection for a given database/sql connection
@@ -24,8 +24,6 @@ func Open(driver, dsn string, log EventReceiver) (*Connection, error) {
 		d = dialect.MySQL
 	case "postgres":
 		d = dialect.PostgreSQL
-	case "sqlite3":
-		d = dialect.SQLite3
 	default:
 		return nil, ErrNotSupported
 	}
@@ -66,7 +64,7 @@ var (
 
 // SessionRunner can do anything that a Session can except start a transaction.
 type SessionRunner interface {
-	Select(column ...string) *SelectBuilder
+	Select(column ...interface{}) *SelectBuilder
 	SelectBySql(query string, value ...interface{}) *SelectBuilder
 
 	InsertInto(table string) *InsertBuilder
@@ -93,7 +91,7 @@ func exec(runner runner, log EventReceiver, builder Builder, d Dialect) (sql.Res
 	err := i.interpolate(placeholder, []interface{}{builder})
 	query, value := i.String(), i.Value()
 	if err != nil {
-		return nil, log.EventErrKv("dbr.exec.interpolate", err, kvs{
+		return nil, log.EventErrKv("fjord.exec.interpolate", err, kvs{
 			"sql":  query,
 			"args": fmt.Sprint(value),
 		})
@@ -101,14 +99,14 @@ func exec(runner runner, log EventReceiver, builder Builder, d Dialect) (sql.Res
 
 	startTime := time.Now()
 	defer func() {
-		log.TimingKv("dbr.exec", time.Since(startTime).Nanoseconds(), kvs{
+		log.TimingKv("fjord.exec", time.Since(startTime).Nanoseconds(), kvs{
 			"sql": query,
 		})
 	}()
 
 	result, err := runner.Exec(query, value...)
 	if err != nil {
-		return result, log.EventErrKv("dbr.exec.exec", err, kvs{
+		return result, log.EventErrKv("fjord.exec.exec", err, kvs{
 			"sql": query,
 		})
 	}
@@ -124,7 +122,7 @@ func query(runner runner, log EventReceiver, builder Builder, d Dialect, dest in
 	err := i.interpolate(placeholder, []interface{}{builder})
 	query, value := i.String(), i.Value()
 	if err != nil {
-		return 0, log.EventErrKv("dbr.select.interpolate", err, kvs{
+		return 0, log.EventErrKv("fjord.select.interpolate", err, kvs{
 			"sql":  query,
 			"args": fmt.Sprint(value),
 		})
@@ -132,20 +130,21 @@ func query(runner runner, log EventReceiver, builder Builder, d Dialect, dest in
 
 	startTime := time.Now()
 	defer func() {
-		log.TimingKv("dbr.select", time.Since(startTime).Nanoseconds(), kvs{
+		log.TimingKv("fjord.select", time.Since(startTime).Nanoseconds(), kvs{
 			"sql": query,
 		})
 	}()
 
 	rows, err := runner.Query(query, value...)
 	if err != nil {
-		return 0, log.EventErrKv("dbr.select.load.query", err, kvs{
+		return 0, log.EventErrKv("fjord.select.load.query", err, kvs{
 			"sql": query,
 		})
 	}
-	count, err := Load(rows, dest)
+
+	count, err := load(rows, dest)
 	if err != nil {
-		return 0, log.EventErrKv("dbr.select.load.scan", err, kvs{
+		return 0, log.EventErrKv("fjord.select.load.scan", err, kvs{
 			"sql": query,
 		})
 	}

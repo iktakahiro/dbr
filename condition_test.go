@@ -1,9 +1,9 @@
-package dbr
+package fjord
 
 import (
 	"testing"
 
-	"github.com/gocraft/dbr/dialect"
+	"github.com/iktakahiro/fjord/dialect"
 	"github.com/stretchr/testify/assert"
 )
 
