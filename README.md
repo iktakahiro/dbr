@@ -4,7 +4,7 @@
 
 fjord is a Go lang *Struct/databaseRecord Mapper* package.
 
-![fjord](./docs/img/fjord-picture.png)
+![fjord](./docs/img/fjord-picture.jpg)
 
 ## Driver support
 
