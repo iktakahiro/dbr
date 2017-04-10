@@ -78,12 +78,12 @@ type PersonForJoin struct {
 
 // ...
 
-person := new(PersonForJoin)
+person := &PersonForJoin{ID: 1}
 
 sess.Select(fj.I("p.id"), fj.I("p.name"), fj.I("r.person_id"), fj.I("r.name")).
     From(fj.I("person").As("p")).
-    Left(fj.I("role").As("r"), "p.id = r.person_id").
-    Where("p.id = ?", 1)
+    LeftJoin(fj.I("role").As("r"), "p.id = r.person_id").
+    Where("p.id = ?", person.ID).
     Load(person)
 
 // In MySQL dialect:
@@ -199,7 +199,7 @@ sess.InsertInto("suggestion").
 ```go
 sess.Update("suggestions").
     Set("title", "Gopher").
-    Set("body", "We love go.").
+    Set("body", "We love Go.").
     Where("id = ?", 1).
     Exec()
 ```
@@ -209,7 +209,7 @@ sess.Update("suggestions").
 ```go
 setMap := map[string]interface{}{
     "title": "Gopher",
-    "body":  "We love go.",
+    "body":  "We love Go.",
 }
 
 sess.Update("suggestion").
