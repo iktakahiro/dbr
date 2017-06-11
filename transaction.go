@@ -14,8 +14,8 @@ type Tx struct {
 }
 
 // BeginTx starts a transaction with context.
-func (sess *Session) BeginTx() (*Tx, error) {
-	tx, err := sess.Connection.BeginTx(sess.ctx, nil)
+func (sess *Session) BeginTx(options *sql.TxOptions) (*Tx, error) {
+	tx, err := sess.Connection.BeginTx(sess.ctx, options)
 	if err != nil {
 		return nil, sess.EventErr("fjord.begin.error", err)
 	}
@@ -31,18 +31,7 @@ func (sess *Session) BeginTx() (*Tx, error) {
 
 // Begin creates a transaction for the given session
 func (sess *Session) Begin() (*Tx, error) {
-	tx, err := sess.Connection.BeginTx(sess.ctx, nil)
-	if err != nil {
-		return nil, sess.EventErr("fjord.begin.error", err)
-	}
-	sess.Event("fjord.begin")
-
-	return &Tx{
-		EventReceiver: sess,
-		Dialect:       sess.Dialect,
-		Tx:            tx,
-		ctx:           sess.ctx,
-	}, nil
+	return sess.BeginTx(nil)
 }
 
 // Commit finishes the transaction

@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type nullTypedRecord struct {
+	Id         int64
+	StringVal  NullString
+	Int64Val   NullInt64
+	Float64Val NullFloat64
+	TimeVal    NullTime
+	BoolVal    NullBool
+}
+
 var (
 	filledRecord = nullTypedRecord{
 		StringVal:  NewNullString("wow"),

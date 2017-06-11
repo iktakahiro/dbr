@@ -2,7 +2,7 @@ package fjord
 
 type direction bool
 
-// orderby directions
+// order by directions
 // most databases by default use asc
 const (
 	asc  direction = false
@@ -13,12 +13,12 @@ func order(column string, dir direction) Builder {
 	return BuildFunc(func(d Dialect, buf Buffer) error {
 		// FIXME: no quote ident
 		buf.WriteString(column)
-		switch dir {
-		case asc:
-			buf.WriteString(" ASC")
-		case desc:
+
+		if dir {
 			buf.WriteString(" DESC")
+			return nil
 		}
+		buf.WriteString(" ASC")
 		return nil
 	})
 }
