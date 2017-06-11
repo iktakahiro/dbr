@@ -31,7 +31,7 @@ func (sess *Session) BeginTx() (*Tx, error) {
 
 // Begin creates a transaction for the given session
 func (sess *Session) Begin() (*Tx, error) {
-	tx, err := sess.Connection.Begin()
+	tx, err := sess.Connection.BeginTx(sess.ctx, nil)
 	if err != nil {
 		return nil, sess.EventErr("fjord.begin.error", err)
 	}

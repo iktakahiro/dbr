@@ -56,7 +56,6 @@ func (conn *Connection) NewSession(log EventReceiver) *Session {
 		log = conn.EventReceiver // Use parent instrumentation
 	}
 	return conn.NewSessionContext(context.Background(), log)
-	// return &Session{Connection: conn, EventReceiver: log}
 }
 
 func (conn *Connection) NewSessionContext(ctx context.Context, log EventReceiver) *Session {
