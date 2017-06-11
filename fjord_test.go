@@ -199,7 +199,7 @@ func TestBasicCRUD(t *testing.T) {
 		}
 
 		// update
-		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Titor").Exec()
+		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Tailor").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -207,7 +207,7 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		var n NullInt64
-		sess.Select("count(*)").From("person").Where("name = ?", "John Titor").Load(&n)
+		sess.Select("count(*)").From("person").Where("name = ?", "John Tailor").Load(&n)
 		assert.EqualValues(t, 1, n.Int64)
 
 		// delete
@@ -297,7 +297,7 @@ func checkSessionContext(t *testing.T, conn *Connection) {
 		t.Errorf("context was not canceled: %v", err)
 	}
 
-	_, err = sess.Begin()
+	_, err = sess.BeginTx()
 	if err.Error() != "context canceled" {
 		t.Errorf("context was not canceled: %v", err)
 	}
@@ -306,7 +306,7 @@ func checkSessionContext(t *testing.T, conn *Connection) {
 func checkTxQueryContext(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := conn.NewSessionContext(ctx, nil)
-	tx, err := sess.Begin()
+	tx, err := sess.BeginTx()
 
 	if err != nil {
 		cancel()
@@ -327,7 +327,7 @@ func checkTxQueryContext(t *testing.T, conn *Connection) {
 func checkTxExecContext(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := conn.NewSessionContext(ctx, nil)
-	tx, err := sess.Begin()
+	tx, err := sess.BeginTx()
 	if !assert.NoError(t, err) {
 		cancel()
 		return
