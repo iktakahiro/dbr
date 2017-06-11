@@ -2,10 +2,13 @@ package fjord
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iktakahiro/fjord/dialect"
@@ -13,26 +16,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//
-// Test helpers
-//
-
 var (
 	currID int64 = 256
 )
 
-// create id
+// NextID increments the value of currID
 func nextID() int64 {
 	currID++
 	return currID
 }
 
 const (
-	mysqlDSN    = "root@unix(/tmp/mysql.sock)/fj_test?charset=utf8"
-	postgresDSN = "postgres://postgres@localhost:5432/fj_test?sslmode=disable"
+	mysqlDSN    = "root:mysql01@tcp(127.0.0.1:3306)/fj_test?charset=utf8mb4,utf8"
+	postgresDSN = "user=fj_test dbname=fj_test password=postgres01 sslmode=disable"
 )
 
-func createSession(driver, dsn string) *Session {
+// createConnection creates DB connections
+func createConnection(driver, dsn string) *Connection {
 	var testDSN string
 	switch driver {
 	case "mysql":
@@ -47,18 +47,21 @@ func createSession(driver, dsn string) *Session {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sess := conn.NewSession(nil)
-	reset(sess)
-	return sess
+	if err := conn.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	resetDB(conn)
+	return conn
 }
 
 var (
-	mysqlSession          = createSession("mysql", mysqlDSN)
-	postgresSession       = createSession("postgres", postgresDSN)
-	postgresBinarySession = createSession("postgres", postgresDSN+"&binary_parameters=yes")
+	mysqlConnection          = createConnection("mysql", mysqlDSN)
+	postgresConnection       = createConnection("postgres", postgresDSN)
+	postgresBinaryConnection = createConnection("postgres", postgresDSN+" binary_parameters=yes")
 
 	// all test sessions should be here
-	testSession = []*Session{mysqlSession, postgresSession}
+	testConnections = []*Connection{mysqlConnection, postgresConnection, postgresBinaryConnection}
 )
 
 type Person struct {
@@ -67,16 +70,10 @@ type Person struct {
 	Email string
 }
 
-type nullTypedRecord struct {
-	Id         int64
-	StringVal  NullString
-	Int64Val   NullInt64
-	Float64Val NullFloat64
-	TimeVal    NullTime
-	BoolVal    NullBool
-}
+// resetDB drops and creates databases
+func resetDB(conn *Connection) {
+	sess := conn.NewSessionContext(context.Background(), nil)
 
-func reset(sess *Session) {
 	var autoIncrementType string
 	switch sess.Dialect {
 	case dialect.MySQL:
@@ -121,35 +118,11 @@ func reset(sess *Session) {
 	}
 }
 
-func BenchmarkByteaNoBinaryEncode(b *testing.B) {
-	benchmarkBytea(b, postgresSession)
-}
-
-func BenchmarkByteaBinaryEncode(b *testing.B) {
-	benchmarkBytea(b, postgresBinarySession)
-}
-
-func benchmarkBytea(b *testing.B, sess *Session) {
-	data := bytes.Repeat([]byte("0123456789"), 1000)
-	for _, v := range []string{
-		`DROP TABLE IF EXISTS bytea_table`,
-		`CREATE TABLE bytea_table (
-			val bytea
-		)`,
-	} {
-		_, err := sess.Exec(v)
-		assert.NoError(b, err)
-	}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		_, err := sess.InsertInto("bytea_table").Pair("val", data).Exec()
-		assert.NoError(b, err)
-	}
-}
-
 func TestBasicCRUD(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+
+		sess := conn.NewSession(nil)
+
 		person := Person{
 			Name:  "John Titor",
 			Email: "john@example.com",
@@ -159,7 +132,8 @@ func TestBasicCRUD(t *testing.T) {
 			person.ID = nextID()
 			insertColumns = []string{"id", "name", "email"}
 		}
-		// insert
+
+		// INSERT
 		result, err := sess.InsertInto("person").Columns(insertColumns...).Record(&person).Exec()
 		assert.NoError(t, err)
 
@@ -168,7 +142,8 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		assert.True(t, person.ID > 0)
-		// select
+
+		// SELECT
 		var persons []Person
 		count, err := sess.Select("*").From("person").Where(Eq("id", person.ID)).Load(&persons)
 		assert.NoError(t, err)
@@ -178,8 +153,8 @@ func TestBasicCRUD(t *testing.T) {
 			assert.Equal(t, person.Email, persons[0].Email)
 		}
 
-		// update
-		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Taylor").Exec()
+		// UPDATE
+		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Tailor").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -187,10 +162,10 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		var n NullInt64
-		sess.Select("count(*)").From("person").Where("name = ?", "John Taylor").Load(&n)
+		sess.Select("count(*)").From("person").Where("name = ?", "John Tailor").Load(&n)
 		assert.EqualValues(t, 1, n.Int64)
 
-		// delete
+		// DELETE
 		result, err = sess.DeleteFrom("person").Where(Eq("id", person.ID)).Exec()
 		assert.NoError(t, err)
 
@@ -216,11 +191,15 @@ type PersonForJoin struct {
 }
 
 func TestJoin(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+
+		sess := conn.NewSession(nil)
+
 		person := &PersonWithTag{
 			ID:   2036,
 			Name: "John Titor",
 		}
+
 		// insert - person
 		_, err := sess.InsertInto("person2").Columns("id", "name").Record(person).Exec()
 		assert.NoError(t, err)
@@ -229,12 +208,12 @@ func TestJoin(t *testing.T) {
 			PersonID: 2036,
 			Name:     "Time Traveler",
 		}
+
 		//insert - role
 		_, err = sess.InsertInto("role").Columns("person_id", "name").Record(role).Exec()
 		assert.NoError(t, err)
 
 		// select
-
 		personForJoin := new(PersonForJoin)
 		_, err = sess.Select(I("p.id"), I("p.name"), I("r.person_id"), I("r.name")).
 			From(I("person2").As("p")).
@@ -247,5 +226,136 @@ func TestJoin(t *testing.T) {
 		assert.Equal(t, personForJoin.PersonWithTag.Name, "John Titor")
 		assert.Equal(t, personForJoin.RoleWithTag.PersonID, 2036)
 		assert.Equal(t, personForJoin.RoleWithTag.Name, "Time Traveler")
+	}
+}
+
+func TestContextCancel(t *testing.T) {
+
+	for _, conn := range testConnections {
+		checkSessionContext(t, conn)
+		checkTxQueryContext(t, conn)
+		checkTxExecContextTimeout(t, conn)
+
+		if conn.Dialect == dialect.PostgreSQL {
+			checkTxExecContext(t, conn)
+		}
+	}
+}
+
+func checkSessionContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+
+	cancel()
+
+	var one int
+	_, err := sess.SelectBySql("SELECT 1").Load(&one)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
+	}
+
+	_, err = sess.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
+	}
+
+	_, err = sess.BeginTx(nil)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
+	}
+}
+
+func checkTxQueryContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+	options := &sql.TxOptions{
+		Isolation: sql.LevelDefault,
+		ReadOnly:  false,
+	}
+	tx, err := sess.BeginTx(options)
+
+	if err != nil {
+		cancel()
+		t.Errorf("transaction was not begun: %v", err)
+	}
+	cancel()
+
+	var one int
+	_, err = tx.SelectBySql("SELECT 1").Load(&one)
+
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
+	}
+
+	tx.RollbackUnlessCommitted()
+}
+
+func checkTxExecContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+	tx, err := sess.BeginTx(nil)
+	if err != nil {
+		cancel()
+		t.Errorf("transaction was not begun: %v", err)
+	}
+	_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err != nil {
+		t.Errorf("failed to update database: %v", err)
+	}
+	cancel()
+	err = tx.Commit()
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
+	}
+	tx.RollbackUnlessCommitted()
+}
+
+func checkTxExecContextTimeout(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	sess := conn.NewSessionContext(ctx, nil)
+	tx, err := sess.BeginTx(nil)
+	if err != nil {
+		cancel()
+		t.Errorf("transaction was not begun: %v", err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err != context.DeadlineExceeded {
+		t.Errorf("context should exceed deadline: %v", err)
+	}
+
+	tx.RollbackUnlessCommitted()
+}
+
+// for Benchmarks
+
+func BenchmarkByteaNoBinaryEncode(b *testing.B) {
+	benchmarkBytea(b, postgresConnection)
+}
+
+func BenchmarkByteaBinaryEncode(b *testing.B) {
+	benchmarkBytea(b, postgresBinaryConnection)
+}
+
+func benchmarkBytea(b *testing.B, conn *Connection) {
+	sess := conn.NewSessionContext(context.Background(), nil)
+
+	data := bytes.Repeat([]byte("0123456789"), 1000)
+	for _, v := range []string{
+		`DROP TABLE IF EXISTS bytea_table`,
+		`CREATE TABLE bytea_table (
+			val bytea
+		)`,
+	} {
+		_, err := sess.Exec(v)
+		assert.NoError(b, err)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := sess.InsertInto("bytea_table").Pair("val", data).Exec()
+		assert.NoError(b, err)
 	}
 }

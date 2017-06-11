@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type nullTypedRecord struct {
+	Id         int64
+	StringVal  NullString
+	Int64Val   NullInt64
+	Float64Val NullFloat64
+	TimeVal    NullTime
+	BoolVal    NullBool
+}
+
 var (
 	filledRecord = nullTypedRecord{
 		StringVal:  NewNullString("wow"),
@@ -28,7 +37,8 @@ func TestNullTypesScanning(t *testing.T) {
 			in: filledRecord,
 		},
 	} {
-		for _, sess := range testSession {
+		for _, conn := range testConnections {
+			sess := conn.NewSession(nil)
 			test.in.Id = nextID()
 			_, err := sess.InsertInto("null_types").Columns("id", "string_val", "int64_val", "float64_val", "time_val", "bool_val").Record(test.in).Exec()
 			assert.NoError(t, err)
