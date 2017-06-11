@@ -40,7 +40,7 @@ dsn := "fj_test:password@tcp(127.0.0.1:3306)/fj_test?charset=utf8mb4,utf8"
 conn, _ := fjord.Open("mysql", dsn)
 
 // for PostgreSQL
-// dsn := user=fj_test dbname=fj_test password=password sslmode=disable"
+// dsn := "user=fj_test dbname=fj_test password=password sslmode=disable"
 // conn, _ := fjord.Open("postgres", dsn)
 
 
