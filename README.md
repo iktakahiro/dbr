@@ -64,9 +64,16 @@ conn, _ := fjord.Open("mysql", dsn)
 ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 
 sess := conn.NewSessionContext(ctx, nil)
-tx, _ := sess.BeginTx(nil)
 
-// Sleep to time out
+options := &sql.TxOptions{
+    Isolation: sql.LevelDefault,
+    ReadOnly:  false,
+}
+
+// options may be nil.
+tx, _ := sess.BeginTx(options)
+
+// sleep to time out
 time.Sleep(200 * time.Millisecond)
 
 _, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
