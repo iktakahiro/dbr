@@ -2,6 +2,7 @@ package fjord
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -50,6 +51,25 @@ func createSession(driver, dsn string) *Session {
 	sess := conn.NewSession(nil)
 	reset(sess)
 	return sess
+}
+
+func getConnection(driver, dsn string) *Connection {
+	var testDSN string
+	switch driver {
+	case "mysql":
+		testDSN = os.Getenv("FJORD_TEST_MYSQL_DSN")
+	case "postgres":
+		testDSN = os.Getenv("FJORD_TEST_POSTGRES_DSN")
+	}
+	if testDSN != "" {
+		dsn = testDSN
+	}
+	conn, err := Open(driver, dsn, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return conn
 }
 
 var (
@@ -179,7 +199,7 @@ func TestBasicCRUD(t *testing.T) {
 		}
 
 		// update
-		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Taylor").Exec()
+		result, err = sess.Update("person").Where(Eq("id", person.ID)).Set("name", "John Titor").Exec()
 		assert.NoError(t, err)
 
 		rowsAffected, err = result.RowsAffected()
@@ -187,7 +207,7 @@ func TestBasicCRUD(t *testing.T) {
 		assert.EqualValues(t, 1, rowsAffected)
 
 		var n NullInt64
-		sess.Select("count(*)").From("person").Where("name = ?", "John Taylor").Load(&n)
+		sess.Select("count(*)").From("person").Where("name = ?", "John Titor").Load(&n)
 		assert.EqualValues(t, 1, n.Int64)
 
 		// delete
@@ -247,5 +267,78 @@ func TestJoin(t *testing.T) {
 		assert.Equal(t, personForJoin.PersonWithTag.Name, "John Titor")
 		assert.Equal(t, personForJoin.RoleWithTag.PersonID, 2036)
 		assert.Equal(t, personForJoin.RoleWithTag.Name, "Time Traveler")
+	}
+}
+
+func TestContextCancel(t *testing.T) {
+	mysqlConnection := getConnection("mysql", mysqlDSN)
+	postgresConnection := getConnection("postgres", postgresDSN)
+	for _, connection := range []*Connection{mysqlConnection, postgresConnection} {
+		checkSessionContext(t, connection)
+		checkTxQueryContext(t, connection)
+		checkTxExecContext(t, connection)
+	}
+}
+
+func checkSessionContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+
+	cancel()
+
+	var one int
+	_, err := sess.SelectBySql("SELECT 1").Load(&one)
+	if err.Error() != "context canceled" {
+		t.Errorf("context was not canceled: %v", err)
+	}
+
+	_, err = sess.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err.Error() != "context canceled" {
+		t.Errorf("context was not canceled: %v", err)
+	}
+
+	_, err = sess.Begin()
+	if err.Error() != "context canceled" {
+		t.Errorf("context was not canceled: %v", err)
+	}
+}
+
+func checkTxQueryContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+	tx, err := sess.Begin()
+
+	if err != nil {
+		cancel()
+		t.Errorf("transaction was not begun: %v", err)
+	}
+	cancel()
+
+	var one int
+	_, err = tx.SelectBySql("SELECT 1").Load(&one)
+
+	if err.Error() != "context canceled" {
+		t.Errorf("context was not canceled: %v", err)
+	}
+
+	tx.RollbackUnlessCommitted()
+}
+
+func checkTxExecContext(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sess := conn.NewSessionContext(ctx, nil)
+	tx, err := sess.Begin()
+	if !assert.NoError(t, err) {
+		cancel()
+		return
+	}
+	_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err != nil {
+		t.Errorf("failed to update database: %v", err)
+	}
+	cancel()
+
+	if tx.Commit().Error() != "context canceled" {
+		t.Errorf("context was not canceled: %v", err)
 	}
 }
