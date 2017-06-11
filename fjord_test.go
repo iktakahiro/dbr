@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"database/sql"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iktakahiro/fjord/dialect"
 	_ "github.com/lib/pq"
@@ -303,7 +305,11 @@ func checkSessionContext(t *testing.T, conn *Connection) {
 func checkTxQueryContext(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := conn.NewSessionContext(ctx, nil)
-	tx, err := sess.BeginTx()
+	options := &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+		ReadOnly:  false,
+	}
+	tx, err := sess.BeginTx(options)
 
 	if err != nil {
 		cancel()
@@ -324,7 +330,7 @@ func checkTxQueryContext(t *testing.T, conn *Connection) {
 func checkTxExecContext(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := conn.NewSessionContext(ctx, nil)
-	tx, err := sess.BeginTx()
+	tx, err := sess.BeginTx(nil)
 	if err != nil {
 		cancel()
 		t.Errorf("transaction was not begun: %v", err)
@@ -345,7 +351,7 @@ func checkTxExecContext(t *testing.T, conn *Connection) {
 func checkTxExecContextTimeout(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	sess := conn.NewSessionContext(ctx, nil)
-	tx, err := sess.BeginTx()
+	tx, err := sess.BeginTx(nil)
 	if err != nil {
 		cancel()
 		t.Errorf("transaction was not begun: %v", err)
