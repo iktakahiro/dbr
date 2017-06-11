@@ -53,25 +53,6 @@ func createSession(driver, dsn string) *Session {
 	return sess
 }
 
-func getConnection(driver, dsn string) *Connection {
-	var testDSN string
-	switch driver {
-	case "mysql":
-		testDSN = os.Getenv("FJORD_TEST_MYSQL_DSN")
-	case "postgres":
-		testDSN = os.Getenv("FJORD_TEST_POSTGRES_DSN")
-	}
-	if testDSN != "" {
-		dsn = testDSN
-	}
-	conn, err := Open(driver, dsn, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return conn
-}
-
 var (
 	mysqlSession          = createSession("mysql", mysqlDSN)
 	postgresSession       = createSession("postgres", postgresDSN)
@@ -273,15 +254,9 @@ func TestJoin(t *testing.T) {
 func TestContextCancel(t *testing.T) {
 
 	for _, sess := range testSession {
-		sess.Close()
-	}
-
-	mysqlConnection := getConnection("mysql", mysqlDSN)
-	postgresConnection := getConnection("postgres", postgresDSN)
-	for _, connection := range []*Connection{mysqlConnection, postgresConnection} {
-		checkSessionContext(t, connection)
-		checkTxQueryContext(t, connection)
-		checkTxExecContext(t, connection)
+		checkSessionContext(t, sess.Connection)
+		checkTxQueryContext(t, sess.Connection)
+		checkTxExecContext(t, sess.Connection)
 	}
 }
 
