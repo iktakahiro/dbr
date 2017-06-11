@@ -3,3 +3,7 @@ machine:
   environment:
     FJORD_TEST_MYSQL_DSN: "ubuntu:@unix(/var/run/mysqld/mysqld.sock)/circle_test?charset=utf8"
     FJORD_TEST_POSTGRES_DSN: "postgres://ubuntu:@127.0.0.1:5432/circle_test"
+test:
+  override:
+    - go test -v -race $(go list ./... | grep -v /vendor/)
+

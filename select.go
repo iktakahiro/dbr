@@ -162,7 +162,7 @@ func (b *SelectStmt) Distinct() *SelectStmt {
 	return b
 }
 
-// Where adds a where condition
+// Where adds a `WHERE` condition
 func (b *SelectStmt) Where(query interface{}, value ...interface{}) *SelectStmt {
 	switch query := query.(type) {
 	case string:
@@ -173,7 +173,7 @@ func (b *SelectStmt) Where(query interface{}, value ...interface{}) *SelectStmt 
 	return b
 }
 
-// Having adds a having condition
+// Having adds a `HAVING` condition
 func (b *SelectStmt) Having(query interface{}, value ...interface{}) *SelectStmt {
 	switch query := query.(type) {
 	case string:
@@ -192,24 +192,25 @@ func (b *SelectStmt) GroupBy(col ...string) *SelectStmt {
 	return b
 }
 
-// OrderBy specifies columns for ordering
+// OrderAsc specifies columns for ordering
 func (b *SelectStmt) OrderAsc(col string) *SelectStmt {
 	b.Order = append(b.Order, order(col, asc))
 	return b
 }
 
+// OrderDesc specifies columns for ordering
 func (b *SelectStmt) OrderDesc(col string) *SelectStmt {
 	b.Order = append(b.Order, order(col, desc))
 	return b
 }
 
-// Limit adds limit
+// Limit adds `LIMIT`
 func (b *SelectStmt) Limit(n uint64) *SelectStmt {
 	b.LimitCount = int64(n)
 	return b
 }
 
-// Offset adds offset
+// Offset adds `OFFSET`
 func (b *SelectStmt) Offset(n uint64) *SelectStmt {
 	b.OffsetCount = int64(n)
 	return b
