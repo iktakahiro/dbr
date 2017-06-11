@@ -2,20 +2,18 @@
 
 [![CircleCI](https://circleci.com/gh/iktakahiro/fjord/tree/master.svg?style=svg)](https://circleci.com/gh/iktakahiro/fjord/tree/master)
 
-fjord is a Go lang *Struct/databaseRecord Mapper* package.
+fjord is a Golang *Struct/databaseRecord Mapper* (thin O/R Mapper) package.
 
 ![fjord](./docs/img/fjord-picture.jpg)
 
 ## Driver support
 
-* MySQL 5.6
-* (PostgreSQL)
+* PostgreSQL 9.6
+* (MySQL 5.6)
 
 ## Go versions
 
 - 1.8
-
-But fjord does not support context yet. I'll update it.
 
 ## Install
 
@@ -51,7 +49,28 @@ sess.Select("id", "title").
     Load(&suggestion)
 ```
 
-## JOIN using Tag and Identifier (**Experimental**)
+## Context Support
+
+fjord supports context.Context:
+
+```go
+conn, _ := fjord.Open("mysql", dsn)
+
+ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+
+sess := conn.NewSessionContext(ctx, nil)
+tx, _ := sess.BeginTx()
+
+// Set sleep to timeout
+time.Sleep(200 * time.Millisecond)
+
+_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+if err != nil {
+   // context.DeadlineExceeded is occurred.
+}
+```
+
+## JOIN using Tag and Identifier
 
 This syntax is one of the key features in fjord.
 
