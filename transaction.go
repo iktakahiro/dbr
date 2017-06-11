@@ -41,6 +41,7 @@ func (sess *Session) Begin() (*Tx, error) {
 		EventReceiver: sess,
 		Dialect:       sess.Dialect,
 		Tx:            tx,
+		ctx:           sess.ctx,
 	}, nil
 }
 

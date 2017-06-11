@@ -7,7 +7,8 @@ import (
 )
 
 func TestTransactionCommit(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+		sess := conn.NewSession(nil)
 		tx, err := sess.Begin()
 		assert.NoError(t, err)
 		defer tx.RollbackUnlessCommitted()
@@ -31,7 +32,8 @@ func TestTransactionCommit(t *testing.T) {
 }
 
 func TestTransactionRollback(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+		sess := conn.NewSession(nil)
 		tx, err := sess.Begin()
 		assert.NoError(t, err)
 		defer tx.RollbackUnlessCommitted()

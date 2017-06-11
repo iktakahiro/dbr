@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iktakahiro/fjord/dialect"
@@ -29,11 +30,11 @@ func nextID() int64 {
 }
 
 const (
-	mysqlDSN    = "root@unix(/tmp/mysql.sock)/fj_test?charset=utf8"
-	postgresDSN = "postgres://postgres@localhost:5432/fj_test?sslmode=disable"
+	mysqlDSN    = "root:mysql01@tcp(127.0.0.1:3306)/fj_test?charset=utf8mb4,utf8"
+	postgresDSN = "user=fj_test dbname=fj_test password=postgres01 sslmode=disable"
 )
 
-func createSession(driver, dsn string) *Session {
+func createConnection(driver, dsn string) *Connection {
 	var testDSN string
 	switch driver {
 	case "mysql":
@@ -48,18 +49,21 @@ func createSession(driver, dsn string) *Session {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sess := conn.NewSession(nil)
-	reset(sess)
-	return sess
+	if err := conn.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	reset(conn)
+	return conn
 }
 
 var (
-	mysqlSession          = createSession("mysql", mysqlDSN)
-	postgresSession       = createSession("postgres", postgresDSN)
-	postgresBinarySession = createSession("postgres", postgresDSN+"&binary_parameters=yes")
+	mysqlConnection          = createConnection("mysql", mysqlDSN)
+	postgresConnection       = createConnection("postgres", postgresDSN)
+	postgresBinaryConnection = createConnection("postgres", postgresDSN+" binary_parameters=yes")
 
 	// all test sessions should be here
-	testSession = []*Session{mysqlSession, postgresSession}
+	testConnections = []*Connection{mysqlConnection, postgresConnection}
 )
 
 type Person struct {
@@ -77,7 +81,8 @@ type nullTypedRecord struct {
 	BoolVal    NullBool
 }
 
-func reset(sess *Session) {
+func reset(conn *Connection) {
+	sess := conn.NewSessionContext(context.Background(), nil)
 	var autoIncrementType string
 	switch sess.Dialect {
 	case dialect.MySQL:
@@ -123,14 +128,16 @@ func reset(sess *Session) {
 }
 
 func BenchmarkByteaNoBinaryEncode(b *testing.B) {
-	benchmarkBytea(b, postgresSession)
+	benchmarkBytea(b, postgresConnection)
 }
 
 func BenchmarkByteaBinaryEncode(b *testing.B) {
-	benchmarkBytea(b, postgresBinarySession)
+	benchmarkBytea(b, postgresBinaryConnection)
 }
 
-func benchmarkBytea(b *testing.B, sess *Session) {
+func benchmarkBytea(b *testing.B, conn *Connection) {
+	sess := conn.NewSessionContext(context.Background(), nil)
+
 	data := bytes.Repeat([]byte("0123456789"), 1000)
 	for _, v := range []string{
 		`DROP TABLE IF EXISTS bytea_table`,
@@ -150,7 +157,10 @@ func benchmarkBytea(b *testing.B, sess *Session) {
 }
 
 func TestBasicCRUD(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+
+		sess := conn.NewSession(nil)
+
 		person := Person{
 			Name:  "John Titor",
 			Email: "john@example.com",
@@ -217,7 +227,10 @@ type PersonForJoin struct {
 }
 
 func TestJoin(t *testing.T) {
-	for _, sess := range testSession {
+	for _, conn := range testConnections {
+
+		sess := conn.NewSession(nil)
+
 		person := &PersonWithTag{
 			ID:   2036,
 			Name: "John Titor",
@@ -253,10 +266,14 @@ func TestJoin(t *testing.T) {
 
 func TestContextCancel(t *testing.T) {
 
-	for _, sess := range testSession {
-		checkSessionContext(t, sess.Connection)
-		checkTxQueryContext(t, sess.Connection)
-		checkTxExecContext(t, sess.Connection)
+	for _, conn := range testConnections {
+		checkSessionContext(t, conn)
+		checkTxQueryContext(t, conn)
+		checkTxExecContextTimeout(t, conn)
+
+		if conn.Dialect == dialect.PostgreSQL {
+			checkTxExecContext(t, conn)
+		}
 	}
 }
 
@@ -268,18 +285,18 @@ func checkSessionContext(t *testing.T, conn *Connection) {
 
 	var one int
 	_, err := sess.SelectBySql("SELECT 1").Load(&one)
-	if err.Error() != "context canceled" {
-		t.Errorf("context was not canceled: %v", err)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
 	}
 
 	_, err = sess.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
-	if err.Error() != "context canceled" {
-		t.Errorf("context was not canceled: %v", err)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
 	}
 
 	_, err = sess.BeginTx()
-	if err.Error() != "context canceled" {
-		t.Errorf("context was not canceled: %v", err)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
 	}
 }
 
@@ -297,8 +314,8 @@ func checkTxQueryContext(t *testing.T, conn *Connection) {
 	var one int
 	_, err = tx.SelectBySql("SELECT 1").Load(&one)
 
-	if err.Error() != "context canceled" {
-		t.Errorf("context was not canceled: %v", err)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
 	}
 
 	tx.RollbackUnlessCommitted()
@@ -308,17 +325,38 @@ func checkTxExecContext(t *testing.T, conn *Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
 	sess := conn.NewSessionContext(ctx, nil)
 	tx, err := sess.BeginTx()
-	if !assert.NoError(t, err) {
+	if err != nil {
 		cancel()
-		return
+		t.Errorf("transaction was not begun: %v", err)
 	}
 	_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
 	if err != nil {
 		t.Errorf("failed to update database: %v", err)
 	}
 	cancel()
-
-	if tx.Commit().Error() != "context canceled" {
-		t.Errorf("context was not canceled: %v", err)
+	err = tx.Commit()
+	fmt.Println(err)
+	if err != context.Canceled {
+		t.Errorf("context should be canceled: %v", err)
 	}
+	tx.RollbackUnlessCommitted()
+}
+
+func checkTxExecContextTimeout(t *testing.T, conn *Connection) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	sess := conn.NewSessionContext(ctx, nil)
+	tx, err := sess.BeginTx()
+	if err != nil {
+		cancel()
+		t.Errorf("transaction was not begun: %v", err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	_, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
+	if err != context.DeadlineExceeded {
+		t.Errorf("context should exceed deadline: %v", err)
+	}
+
+	tx.RollbackUnlessCommitted()
 }
