@@ -304,7 +304,6 @@ func checkTxExecContext(t *testing.T, conn *Connection) {
 	}
 	cancel()
 	err = tx.Commit()
-	fmt.Println(err)
 	if err != context.Canceled {
 		t.Errorf("context should be canceled: %v", err)
 	}
