@@ -39,6 +39,11 @@ import (
 dsn := "fj_test:password@tcp(127.0.0.1:3306)/fj_test?charset=utf8mb4,utf8"
 conn, _ := fjord.Open("mysql", dsn)
 
+// for PostgreSQL
+// dsn := user=fj_test dbname=fj_test password=password sslmode=disable"
+// conn, _ := fjord.Open("postgres", dsn)
+
+
 sess := conn.NewSession(nil)
 
 var suggestion Suggestion
@@ -51,7 +56,7 @@ sess.Select("id", "title").
 
 ## Context Support
 
-fjord supports context.Context:
+fjord supports [context](https://golang.org/pkg/context/):
 
 ```go
 conn, _ := fjord.Open("mysql", dsn)
@@ -61,7 +66,7 @@ ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 sess := conn.NewSessionContext(ctx, nil)
 tx, _ := sess.BeginTx()
 
-// Set sleep to timeout
+// Sleep to time out
 time.Sleep(200 * time.Millisecond)
 
 _, err = tx.Update("person").Where(Eq("id", 1)).Set("name", "john Titor").Exec()
