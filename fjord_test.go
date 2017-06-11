@@ -271,6 +271,11 @@ func TestJoin(t *testing.T) {
 }
 
 func TestContextCancel(t *testing.T) {
+
+	for _, sess := range testSession {
+		sess.Close()
+	}
+
 	mysqlConnection := getConnection("mysql", mysqlDSN)
 	postgresConnection := getConnection("postgres", postgresDSN)
 	for _, connection := range []*Connection{mysqlConnection, postgresConnection} {
